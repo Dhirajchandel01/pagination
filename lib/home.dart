@@ -1,65 +1,108 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'data_controller.dart';
 import 'data_model.dart';
-import 'package:provider/provider.dart';
 
 
 
-class DataView extends StatefulWidget {
+class UserListView extends StatefulWidget {
+  const UserListView({super.key});
+
   @override
-  _DataViewState createState() => _DataViewState();
+  _UserListViewState createState() => _UserListViewState();
 }
 
-class _DataViewState extends State<DataView> {
-  late ScrollController _scrollController;
-
+class _UserListViewState extends State<UserListView> {
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController();
-    _scrollController.addListener(_scrollListener);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<DataController>(context, listen: false).fetchData();
+    WidgetsBinding.instance!.addPostFrameCallback((_) {
+      Provider.of<ViewModel>(context, listen: false).fetchData();
     });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _scrollListener() {
-    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
-      Provider.of<DataController>(context, listen: false).loadMoreData();
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('MVC with Pagination Example'),
+        title: const Text('User List'),
+        actions: [
+          Consumer<ViewModel>(
+            builder: (context, viewModel, _) {
+              return IconButton(
+                icon: Icon(viewModel.viewType == ViewType.list
+                    ? Icons.grid_view
+                    : Icons.list),
+                onPressed: () => viewModel.toggleView(),
+              );
+            },
+          ),
+        ],
       ),
-      body: Consumer<DataController>(
-        builder: (context, controller, child) {
-          if (controller.isLoading && controller.dataModel.userList.isEmpty) {
-            return Center(child: CircularProgressIndicator());
-          } else if (controller.statusMessage.isNotEmpty) {
-            return Center(child: Text(controller.statusMessage));
-          } else {
-            return ListView.builder(
-              controller: _scrollController,
-              itemCount: controller.dataModel.userList.length,
+      body: Consumer<ViewModel>(
+        builder: (context, viewModel, _) {
+          if (viewModel.isLoading && viewModel.userList.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (viewModel.hasError) {
+            return const Center(child: Text("Error loading data"));
+          }
+          return NotificationListener<ScrollNotification>(
+            onNotification: (ScrollNotification scrollInfo) {
+              if (!viewModel.isLoading &&
+                  scrollInfo.metrics.pixels ==
+                      scrollInfo.metrics.maxScrollExtent) {
+                viewModel.loadMoreData();
+                return true;
+              }
+              return false;
+            },
+            child: viewModel.viewType == ViewType.list
+                ? ListView.builder(
+              itemCount: viewModel.userList.length,
               itemBuilder: (context, index) {
-                User user = controller.dataModel.userList[index];
+                User user = viewModel.userList[index];
                 return ListTile(
                   title: Text('${user.firstName} ${user.lastName}'),
-                  subtitle: Text(user.email),
+                  subtitle: Text('${user.email} ${user.phoneNo}'),
+                  trailing: ElevatedButton(
+                    onPressed: () {},
+                    child: const Text('View Profile'),
+                  ),
                 );
               },
-            );
-          }
+            )
+                : GridView.builder(
+              gridDelegate:
+              const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2),
+              itemCount: viewModel.userList.length,
+              itemBuilder: (context, index) {
+                User user = viewModel.userList[index];
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${user.firstName} ${user.lastName}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 5),
+                        Text('Email: ${user.email}'),
+                        Text('Phone: ${user.phoneNo}'),
+                        const Spacer(),
+                        ElevatedButton(
+                          onPressed: () {},
+                          child: const Text('View Profile'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
         },
       ),
     );
